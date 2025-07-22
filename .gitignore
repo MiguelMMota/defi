@@ -11,6 +11,13 @@ out/
 # Docs
 docs/
 
-# Dotenv file
+# Dependencies
+lib/
+
+# Environment settings
 .env
+.password
+
+# Dotenv/VsCode files
 .DS_Store
+.vscode/
