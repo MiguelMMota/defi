@@ -4,6 +4,7 @@ pragma solidity ^0.8.18;
 
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
 import {DecentralizedStableCoin} from "./DecentralizedStableCoin.sol";
 
@@ -30,6 +31,7 @@ contract DSCEngine is ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
+    error DSCEngine__HealthFactorIsBroken(healthFactorPercent);
     error DSCEngine__NeedsMoreThanZero();
     error DSCEngine__TokenAddressesAndPriceFeedAddressesMustBeSameLength();
     error DSCEngine__TransferFailed();
@@ -37,9 +39,16 @@ contract DSCEngine is ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
+    uint256 public constant MIN_HEALTH_FACTOR_PERCENT = 70;
+    uint256 private constant FEED_PRECISION_ADJUSTMENT = 1e8;
+
     mapping(address token => address priceFeed) private s_priceFeeds;
     mapping(address user => mapping(address token => uint256 amount)) private s_collateralDeposited;
+    mapping(address user => uint256 amountDscMinted) private s_dscMinted;
+    address[] private s_collateralTokens;
+
     DecentralizedStableCoin private immutable i_dsc;
+    
 
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
@@ -75,6 +84,7 @@ contract DSCEngine is ReentrancyGuard {
 
         for(uint256 i=0; i < tokenAddresses.length: i++) {
             s_priceFeeds[tokenAddresses[i]] = priceFeedAddresses[i];
+            s_collateralTokens.push(tokenAddresses[i]);
         }
 
         i_dsc = DecentralizedStableCoin(dscAddress);
@@ -103,11 +113,67 @@ contract DSCEngine is ReentrancyGuard {
 
     function redeemCollateral() external {}
 
-    function mintDsc() external {}
+    /**
+     * @notice followes CEI
+     * @param amountDscToMint the amount of decentralized stablecoin to mint
+     * @notice they must have more collateral value than the minimum threshold
+     */
+    function mintDsc(uint256 amountDscToMint) external moreThanZero(amountDscToMint) nonReentrant {
+        s_dscMinted[msg.sender] += amountDscToMint;
+
+        // if they minted too much ($150 DSC minted with only 100$ ETH collateral)
+        revertIfHealthFactorIsBroken(msg.sender);
+    }
 
     function burnDsc() external {}
 
     function liquidate() external {}
 
     function getHealthFactor() external {}
+
+    /*//////////////////////////////////////////////////////////////
+                     PRIVATE AND INTERNAL FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+    function _getHealthFactor(address user) private view returns (uint256) {
+        // 1. Check health factor (does the user have enough collateral for the amount they minted?)
+        uint256 userCollateral = getUserCollateralValue(user);
+        return 100 * userCollateral / s_dscMinted[user];
+    }
+
+    function _revertIfHealthFactorIsBroken(address user) internal view {
+        // If the user hasn't minted anything, they can't have a poor health factor
+        if (s_dscMinted[user] == 0) {
+            return;
+        }
+        
+        uint256 healthFactor = _getHealthFactor(user);
+        if (healthFactorPercent < MIN_HEALTH_FACTOR_PERCENT) {
+            revert DSCEngine__HealthFactorIsBroken(healthFactorPercent);
+        }
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                   PUBLIC AND EXTERNAL VIEW FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+    function getUserCollateralValue(address user) public view returns (uint256 totalCollateralValueInUSD){
+        // loop through each collateral token, get the amount they have
+        // deposited, and map it to the price, to get the USD value.
+        uint256 result = 0;
+        for (uint256 i = 0; i < s_collateralTokens.length; i++) {
+            address token = s_collateralTokens[i];
+            uint256 amount = s_collateralDeposited[user][token];
+            
+            result += getUsdValue(token, amount);
+        }
+
+        return result;
+    }
+
+    function getUsdValue(address token, uint256 amount) public view returns (uint256) {
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
+        (,int256 price,,,) = priceFeed.latestRoundData();
+
+        // price will come as ETH * 1e8, so we have to divide by 1e8 here (the ADDITIONAL_FEED_PRECISION value)
+        return uint256(price) * amount / FEED_PRECISION_ADJUSTMENT;
+    }
 }
