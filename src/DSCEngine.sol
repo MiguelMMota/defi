@@ -1,3 +1,25 @@
+// Layout of Contract:
+// version
+// imports
+// errors
+// interfaces, libraries, contracts
+// Type declarations
+// State variables
+// Events
+// Modifiers
+// Functions
+
+// Layout of Functions:
+// constructor
+// receive function (if exists)
+// fallback function (if exists)
+// external
+// public
+// internal
+// private
+// internal & private view & pure functions
+// external & public view & pure functions
+
 // SPDX-License-Identifier: MIT
 
 pragma solidity ^0.8.18;
@@ -35,6 +57,7 @@ contract DSCEngine is ReentrancyGuard {
     error DSCEngine__MintFailed();
     error DSCEngine__NeedsMoreThanZero();
     error DSCEngine__TokenAddressesAndPriceFeedAddressesMustBeSameLength();
+    error DSCEngine__TokenNotAllowed();
     error DSCEngine__TransferFailed();
 
     /*//////////////////////////////////////////////////////////////
@@ -70,8 +93,8 @@ contract DSCEngine is ReentrancyGuard {
         _;
     }
 
-    modifer isAllowedToken(address tokenAddress) {
-        if (s_priceFeeds[tokenAddress] == address(0) || s_collateralTokens[tokenAddress] == address(0)) {
+    modifier isAllowedToken(address tokenAddress) {
+        if (s_priceFeeds[tokenAddress] == address(0) || _isCollateralToken(tokenAddress)) {
             revert DSCEngine__TokenNotAllowed();
         }
 
@@ -82,11 +105,11 @@ contract DSCEngine is ReentrancyGuard {
                                FUNCTIONS
     //////////////////////////////////////////////////////////////*/
     constructor(address[] memory tokenAddresses, address[] memory priceFeedAddresses, address dscAddress) {
-        if(tokenAddresses.length != priceFeedAddresses) {
+        if(tokenAddresses.length != priceFeedAddresses.length) {
             revert DSCEngine__TokenAddressesAndPriceFeedAddressesMustBeSameLength();
         }
 
-        for(uint256 i=0; i < tokenAddresses.length: i++) {
+        for(uint256 i=0; i < tokenAddresses.length; i++) {
             s_priceFeeds[tokenAddresses[i]] = priceFeedAddresses[i];
             s_collateralTokens.push(tokenAddresses[i]);
         }
@@ -144,6 +167,15 @@ contract DSCEngine is ReentrancyGuard {
                      PRIVATE AND INTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
     
+    function _isCollateralToken(address tokenAddress) private view returns(bool) {
+        for (uint256 i = 0; i < s_collateralTokens.length; i++) {
+            if (s_collateralTokens[i] == tokenAddress) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * @notice health factor represents how close the user is to the limit how much their collateral allows them to borrow (i.e. mint).
      *          For example, if:
