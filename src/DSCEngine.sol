@@ -31,7 +31,7 @@ contract DSCEngine is ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
-    error DSCEngine__HealthFactorIsBroken(healthFactorPercent);
+    error DSCEngine__HealthFactorIsBroken(uint256 healthFactor);
     error DSCEngine__NeedsMoreThanZero();
     error DSCEngine__TokenAddressesAndPriceFeedAddressesMustBeSameLength();
     error DSCEngine__TransferFailed();
@@ -39,8 +39,11 @@ contract DSCEngine is ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
-    uint256 public constant MIN_HEALTH_FACTOR_PERCENT = 70;
+    uint256 public constant LIQUIDATION_THRESHOLD = 50;
+    uint256 public constant LIQUIDATION_PRECISION = 100;
     uint256 private constant FEED_PRECISION_ADJUSTMENT = 1e8;
+    uint256 private constant MIN_HEALTH_FACTOR = 1e18;
+    uint256 private constant PRECISION = 1e18;
 
     mapping(address token => address priceFeed) private s_priceFeeds;
     mapping(address user => mapping(address token => uint256 amount)) private s_collateralDeposited;
@@ -67,7 +70,7 @@ contract DSCEngine is ReentrancyGuard {
     }
 
     modifer isAllowedToken(address tokenAddress) {
-        if (s_priceFeeds[tokenAddress] == address(0)) {
+        if (s_priceFeeds[tokenAddress] == address(0) || s_collateralTokens[tokenAddress] == address(0)) {
             revert DSCEngine__TokenNotAllowed();
         }
 
@@ -122,7 +125,7 @@ contract DSCEngine is ReentrancyGuard {
         s_dscMinted[msg.sender] += amountDscToMint;
 
         // if they minted too much ($150 DSC minted with only 100$ ETH collateral)
-        revertIfHealthFactorIsBroken(msg.sender);
+        _revertIfHealthFactorIsBroken(msg.sender);
     }
 
     function burnDsc() external {}
@@ -134,10 +137,30 @@ contract DSCEngine is ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                      PRIVATE AND INTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
+    
+    /**
+     * @notice health factor represents how close the user is to the limit how much their collateral allows them to borrow (i.e. mint).
+     *          For example, if:
+     *              1. we require that collateral be 3x greater than minted value and
+     *              2. the user has 1200$ in collateral
+     *              3. the user has borrowed (i.e.: minted) 250$, then
+     * 
+     *              a. The maximum borrow amount is 1200$ / 3 = 400$
+     *              b. The user has a health factor of 400 / 250 = 1.6
+     * 
+     *          We use this metric to determine when to liquidate a user and/or prevent further minting by a user. 
+     *          When health factor goes below 1, then the user's has exceeding their collateral's borrowing power.
+     */
     function _getHealthFactor(address user) private view returns (uint256) {
         // 1. Check health factor (does the user have enough collateral for the amount they minted?)
         uint256 userCollateral = getUserCollateralValue(user);
-        return 100 * userCollateral / s_dscMinted[user];
+
+        // (LIQUIDATION_THRESHOLD / LIQUIDATION_PRECISION) normalises the ratio of collateral/minted to [0,1]
+        uint256 maximumMintedAmount = userCollateral * LIQUIDATION_THRESHOLD / LIQUIDATION_PRECISION;
+
+        // we multiply by the precision because if both maximumMintedAmount and s_dscMinted[user] have 1e18 decimal places,
+        // then the result would be normalised, instead of keeping 1e18 decimal places.
+        return maximumMintedAmount * PRECISION / s_dscMinted[user];
     }
 
     function _revertIfHealthFactorIsBroken(address user) internal view {
@@ -146,9 +169,9 @@ contract DSCEngine is ReentrancyGuard {
             return;
         }
         
-        uint256 healthFactor = _getHealthFactor(user);
-        if (healthFactorPercent < MIN_HEALTH_FACTOR_PERCENT) {
-            revert DSCEngine__HealthFactorIsBroken(healthFactorPercent);
+        uint256 userHealthFactor = _getHealthFactor(user);
+        if (userHealthFactor < MIN_HEALTH_FACTOR) {
+            revert DSCEngine__HealthFactorIsBroken(userHealthFactor);
         }
     }
 
@@ -169,8 +192,13 @@ contract DSCEngine is ReentrancyGuard {
         return result;
     }
 
+    /** 
+     * @notice this returns the USD value with 18 decimal places
+     */
     function getUsdValue(address token, uint256 amount) public view returns (uint256) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
+
+        // TODO: different feeds will return price in different number of decimals, we need to be flexible in adjusting for it
         (,int256 price,,,) = priceFeed.latestRoundData();
 
         // price will come as ETH * 1e8, so we have to divide by 1e8 here (the ADDITIONAL_FEED_PRECISION value)
