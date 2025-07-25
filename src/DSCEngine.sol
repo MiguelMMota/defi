@@ -55,7 +55,7 @@ contract DSCEngine is ReentrancyGuard {
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
     error DSCEngine__CantLiquidateUserWithGoodHealthFactor();
-    error DSCEngine__HealthFactorIsBroken(uint256 healthFactor);
+    error DSCEngine__HealthFactorIsBroken();
     error DSCEngine__HealthFactorWorsened();
     error DSCEngine__InsufficientCollateralToRedeem();
     error DSCEngine__InsufficientDSC();
@@ -287,12 +287,13 @@ contract DSCEngine is ReentrancyGuard {
         uint256 usdAmountInWei
     )
         public
+        view
         returns (uint256 tokenAmountInWei)
     {
-        AggregatorV3Interface priceFeed = new AggregatorV3Interface(s_priceFeeds[tokenAddress]);
-        (, int256 price,,,) = priceFeed.latestRoundDate();
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[tokenAddress]);
+        (, int256 price,,,) = priceFeed.latestRoundData();
 
-        return _getNormalisedPriceFeedResult(usdAmountInWei) * PRECISION / price;
+        return _getNormalisedPriceFeedResult(uint256(usdAmountInWei), priceFeed.decimals()) * PRECISION / uint256(price);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -337,17 +338,17 @@ contract DSCEngine is ReentrancyGuard {
         }
     }
 
-    function _getNormalisedPriceFeedResult(int256 price, uint256 decimals) private returns (uint256) {
+    function _getNormalisedPriceFeedResult(uint256 price, uint256 decimals) private pure returns (uint256) {
         // for example, if PRECISION = 1e18 and decimals = 8, then we should multiply the price by e10
-        return uint256(price) * PRECISION / (10 ** decimals);
+        return price * PRECISION / (10 ** decimals);
     }
 
     /**
      * @dev low level internal function. Do not call unless caller has 
      * security checks such as health factor not being broken
-     * @param amountToBurn 
-     * @param onBehalfOf 
-     * @param dscFrom 
+     * @param amountToBurn How uch DSC to remove from circulation
+     * @param onBehalfOf Whose debt is being removed
+     * @param dscFrom Who is paying for the debt removal
      */
     function _burnDsc(uint256 amountToBurn, address onBehalfOf, address dscFrom) private {
         if (s_dscMinted[onBehalfOf] < amountToBurn) {
@@ -408,7 +409,7 @@ contract DSCEngine is ReentrancyGuard {
     function _isHealthFactorBroken(address user) private view returns (bool) {
         // If the user hasn't minted anything, they can't have a poor health factor
         if (s_dscMinted[user] == 0) {
-            return;
+            return false;
         }
 
         uint256 userHealthFactor = _getHealthFactor(user);
@@ -417,9 +418,11 @@ contract DSCEngine is ReentrancyGuard {
 
     function _revertIfHealthFactorIsBroken(address user) internal view {
         if (_isHealthFactorBroken(user)) {
-            revert DSCEngine__HealthFactorIsBroken(userHealthFactor);
+            revert DSCEngine__HealthFactorIsBroken();
         }
     }
+
+    function foo() public pure {}
 
     /*//////////////////////////////////////////////////////////////
                    PUBLIC AND EXTERNAL VIEW FUNCTIONS
@@ -449,6 +452,6 @@ contract DSCEngine is ReentrancyGuard {
         (, int256 price,,,) = priceFeed.latestRoundData();
 
         // both price and amount are in wei (* 1e18), so we need to divide once by that precision factor
-        return _getNormalisedPriceFeedResult(price) * amount / PRECISION;
+        return _getNormalisedPriceFeedResult(uint256(price), priceFeed.decimals()) * amount / PRECISION;
     }
 }
