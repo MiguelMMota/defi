@@ -20,10 +20,28 @@ contract TestDSCSEngine is Test {
     address weth;
     address wbtc;
 
+    address public USER = makeAddr("user");
+    uint256 public constant COLLATERAL_DEPOSIT_AMOUNT = 10 ether;
+    uint256 public constant START_ERC20_BALANCE = 10 ether;
+
+    modifier depositsCollateral() {
+        vm.prank(USER);
+
+        // The user needs to approve the transfer of the amount of WETH
+        // to the smart contract.
+        // In live deployments, this probably occurs via a wallet popup.
+        ERC20Mock(weth).approve(address(engine), COLLATERAL_DEPOSIT_AMOUNT);
+
+        _;
+    }
+
     function setUp() public {
         deployer = new DeployDSC();
         (coin, engine, config) = deployer.createContracts();
         (ethUsdPriceFeed, btcUsdPriceFeed, weth, wbtc,) = config.activeNetworkConfig();
+
+        // give the user 10 ether worth of WETH.
+        ERC20Mock(weth).mint(USER, START_ERC20_BALANCE);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -47,5 +65,14 @@ contract TestDSCSEngine is Test {
         uint256 actualUsd = engine.getUsdValue(wbtc, btcAmount);
 
         assertEq(expectedUsd, actualUsd);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                        DEPOSIT COLLATERAL TESTS
+    //////////////////////////////////////////////////////////////*/
+    function testRevertsIfCollateralIsZero() public depositsCollateral {
+        vm.prank(USER);
+        vm.expectRevert(DSCEngine.DSCEngine__NeedsMoreThanZero.selector);
+        engine.depositCollateral(weth, 0);
     }
 }
