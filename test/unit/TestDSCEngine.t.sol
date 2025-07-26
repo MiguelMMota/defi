@@ -45,6 +45,25 @@ contract TestDSCSEngine is Test {
     }
 
     /*//////////////////////////////////////////////////////////////
+                           CONSTRUCTOR TESTS
+    //////////////////////////////////////////////////////////////*/
+    function testConstructorRevertsIfTokenAddressesAndPriceFeedAddressesHaveDifferentLengths() public {
+        address[] memory tokenAddresses = engine.getCollateralTokens();
+        address[] memory priceFeedAddresses = new address[](1);
+        priceFeedAddresses[0] = engine.getPriceFeeds()[0];
+
+        vm.expectRevert(DSCEngine.DSCEngine__TokenAddressesAndPriceFeedAddressesMustBeSameLength.selector);
+        new DSCEngine(tokenAddresses, priceFeedAddresses, address(coin));
+    }
+
+    function testConstructorRevertsWithoutTokenAndPriceData() public {
+        vm.expectRevert(DSCEngine.DSCEngine__NoTokenAndPriceFeedData.selector);
+        new DSCEngine(new address[](0), new address[](0), address(coin));   
+    }
+
+
+
+    /*//////////////////////////////////////////////////////////////
                             PRICE FEED TESTS
     //////////////////////////////////////////////////////////////*/
     function testGetEthUsdValue() public {

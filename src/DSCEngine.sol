@@ -62,6 +62,7 @@ contract DSCEngine is ReentrancyGuard {
     error DSCEngine__MintFailed();
     error DSCEngine__NeedsMoreThanZero();
     error DSCEngine__NeedUserAddressToLiquidate();
+    error DSCEngine__NoTokenAndPriceFeedData();
     error DSCEngine__TokenAddressesAndPriceFeedAddressesMustBeSameLength();
     error DSCEngine__TokenNotAllowed();
     error DSCEngine__TransferFailed();
@@ -111,9 +112,13 @@ contract DSCEngine is ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                                FUNCTIONS
     //////////////////////////////////////////////////////////////*/
-    constructor(address[] memory tokenAddresses, address[] memory priceFeedAddresses, address dscAddress) {
+    constructor(address[] memory tokenAddresses, address[] memory priceFeedAddresses, address dscAddress) {        
         if (tokenAddresses.length != priceFeedAddresses.length) {
             revert DSCEngine__TokenAddressesAndPriceFeedAddressesMustBeSameLength();
+        }
+
+        if (tokenAddresses.length == 0) {
+            revert DSCEngine__NoTokenAndPriceFeedData();
         }
 
         for (uint256 i = 0; i < tokenAddresses.length; i++) {
@@ -263,20 +268,6 @@ contract DSCEngine is ReentrancyGuard {
         }
         _revertIfHealthFactorIsBroken(msg.sender);
     }
-
-
-    // function _transferCollateralFromUser(
-    //     address collateralTokenAddress,
-    //     address user,
-    //     uint256 collateralAmount
-    // )
-    //     private
-    // {
-    //     s_collateralDeposited[user][collateralTokenAddress] -= collateralAmount;
-    //     s_collateralDeposited[msg.sender][collateralTokenAddress] += collateralAmount;
-
-    //     IRC20(collateralTokenAddress).transfer(msg.sender, collateralTokenAmount);
-    // }
 
     function getHealthFactor() external view returns (uint256) {
         return _getHealthFactor(msg.sender);
@@ -447,11 +438,23 @@ contract DSCEngine is ReentrancyGuard {
     function getUsdValue(address token, uint256 amount) public view returns (uint256) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
 
-        // TODO: different feeds will return price in different number of decimals, we need to be flexible in adjusting
-        // for it
         (, int256 price,,,) = priceFeed.latestRoundData();
 
         // both price and amount are in wei (* 1e18), so we need to divide once by that precision factor
         return _getNormalisedPriceFeedResult(uint256(price), priceFeed.decimals()) * amount / PRECISION;
+    }
+
+    function getCollateralTokens() external view returns(address[] memory) {
+        return s_collateralTokens;
+    }
+
+    function getPriceFeeds() external view returns(address[] memory) {
+        // We can't just return a mapping in Solidity
+        address[] memory result = new address[](s_collateralTokens.length);
+        for (uint256 i=0; i<s_collateralTokens.length; i++) {
+            result[i] = s_priceFeeds[s_collateralTokens[i]];
+        }
+
+        return result;
     }
 }
