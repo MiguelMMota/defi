@@ -13,11 +13,12 @@ contract ServerConstants {
     uint8 public constant DECIMALS = 8;
     uint256 public constant INITIAL_BTC_PRICE = 120_000 * (10 ** DECIMALS); // 120k$ with 8 decimals
     uint256 public constant INITIAL_ETH_PRICE = 3700 * (10 ** DECIMALS); // 3700$ with 8 decimals
-
+    
     address public constant FOUNDRY_DEFAULT_SENDER = 0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38;
-
+    
     address public constant SEPOLIA_TEST_ACCOUNT = 0xCDc986e956f889b6046F500657625E523f06D5F0;
-
+    
+    uint256 public constant LOCAL_CHAIN_ID = 31337;
     uint256 public constant SEPOLIA_ETH_CHAIN_ID = 11_155_111;
 }
 

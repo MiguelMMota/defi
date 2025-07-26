@@ -35,6 +35,12 @@ contract TestDSCSEngine is Test {
         _;
     }
 
+    modifier onlyOnLocalNetwork() {
+        if (block.chainid == config.LOCAL_CHAIN_ID()) {
+            _;
+        }
+    }
+
     function setUp() public {
         deployer = new DeployDSC();
         (coin, engine, config) = deployer.createContracts();
@@ -108,6 +114,16 @@ contract TestDSCSEngine is Test {
         uint256 actualEth = engine.getTokenAmountFromUsd(weth, usdAmountInWei);
 
         assertEq(expectedEth, actualEth);
+    }
+
+    function testGetTokenAmountFromUsdInLocalNetwork() public onlyOnLocalNetwork {
+        // We do a test with specific values to make sure there isn't an error in
+        // both testGetTokenAmountFromUsd and our contract, as they have repeated logic.
+        uint256 expectedEth = 123456;
+        uint256 usdAmountInWei = expectedEth * config.INITIAL_ETH_PRICE() * (10 ** (18 - config.DECIMALS()));
+        uint256 actualEth = engine.getTokenAmountFromUsd(weth, usdAmountInWei);
+
+        assertEq(actualEth, expectedEth * (10 ** engine.PRECISION_DIGITS()));
     }
 
     function testNormalisingPriceFeedResult(uint256 rawPrice, uint256 priceDigits, uint256 decimals) public {
