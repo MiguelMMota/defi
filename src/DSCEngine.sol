@@ -74,7 +74,8 @@ contract DSCEngine is ReentrancyGuard {
     uint256 public constant LIQUIDATION_PRECISION = 100;
     uint256 public constant LIQUIDATION_THRESHOLD = 50;
     uint256 private constant MIN_HEALTH_FACTOR = 1e18;
-    uint256 private constant PRECISION = 1e18;
+    uint256 public constant PRECISION_DIGITS = 18;
+    uint256 private constant PRECISION = 10 ** PRECISION_DIGITS;
 
     mapping(address token => address priceFeed) private s_priceFeeds;
     mapping(address user => mapping(address token => uint256 amount)) private s_collateralDeposited;
@@ -283,8 +284,8 @@ contract DSCEngine is ReentrancyGuard {
     {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[tokenAddress]);
         (, int256 price,,,) = priceFeed.latestRoundData();
-
-        return _getNormalisedPriceFeedResult(uint256(usdAmountInWei), priceFeed.decimals()) * PRECISION / uint256(price);
+        uint256 normalisedPrice = getNormalisedPriceFeedResult(uint256(price), priceFeed.decimals());
+        return usdAmountInWei * PRECISION / normalisedPrice;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -327,11 +328,6 @@ contract DSCEngine is ReentrancyGuard {
         if (!success) {
             revert DSCEngine__TransferFailed();
         }
-    }
-
-    function _getNormalisedPriceFeedResult(uint256 price, uint256 decimals) private pure returns (uint256) {
-        // for example, if PRECISION = 1e18 and decimals = 8, then we should multiply the price by e10
-        return price * PRECISION / (10 ** decimals);
     }
 
     /**
@@ -439,8 +435,15 @@ contract DSCEngine is ReentrancyGuard {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
 
         (, int256 price,,,) = priceFeed.latestRoundData();
+        uint256 normalisedPrice = getNormalisedPriceFeedResult(uint256(price), priceFeed.decimals());
 
         // both price and amount are in wei (* 1e18), so we need to divide once by that precision factor
-        return _getNormalisedPriceFeedResult(uint256(price), priceFeed.decimals()) * amount / PRECISION;
+        // TODO: there's a rounding bug here: for number with infinite decimal places we return 1.2323000000 instead of 1.232323
+        return  normalisedPrice * amount / PRECISION;
+    }
+
+    function getNormalisedPriceFeedResult(uint256 price, uint256 decimals) public pure returns (uint256) {
+        // for example, if PRECISION = 1e18 and decimals = 8, then we should multiply the price by e10
+        return price * (10 ** (PRECISION_DIGITS - decimals));
     }
 }

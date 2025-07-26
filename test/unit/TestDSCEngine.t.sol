@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.18;
 
-import { Test } from "forge-std/Test.sol";
+import { Test, console2 } from "forge-std/Test.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/ERC20Mock.sol";
 
 import {DeployDSC} from "../../script/DeployDSC.s.sol";
@@ -64,29 +64,85 @@ contract TestDSCSEngine is Test {
         new DSCEngine(new address[](0), new address[](0), address(coin));   
     }
 
-
-
     /*//////////////////////////////////////////////////////////////
                             PRICE FEED TESTS
     //////////////////////////////////////////////////////////////*/
     function testGetEthUsdValue() public {
+        uint256 precisionDigits = engine.PRECISION_DIGITS();
+
+        // TODO: fix this, so it also works on other test nets like Sepolia,
+        // which get their own price values
         uint256 ethAmount = 15e18;
         // with ETH/USD = 3700$ as set in ServerConstants,
         // 15 ETH should equal 15 * 3700 = 55000$, with 18 decimals
-        uint256 expectedUsd = 55500e18;  
+        uint256 expectedUsd = config.INITIAL_ETH_PRICE() * ethAmount * (10 ** (precisionDigits - config.DECIMALS())) / (10 ** precisionDigits);
         uint256 actualUsd = engine.getUsdValue(weth, ethAmount);
 
         assertEq(expectedUsd, actualUsd);
     }
 
     function testGetBtcUsdValue() public {
+        // Arrange
+        uint256 precisionDigits = engine.PRECISION_DIGITS();
+
         uint256 btcAmount = 35e17;
         // with BTC/USD = 120k$ as set in ServerConstants,
         // 3.5 BTC should equal to 3.5 * 120_000 = 420_000$, with 18 decimals
-        uint256 expectedUsd = 420_000e18;  
+        uint256 expectedUsd = config.INITIAL_BTC_PRICE() * btcAmount * (10 ** (precisionDigits - config.DECIMALS())) / (10 ** precisionDigits); 
+        
+        // Act
         uint256 actualUsd = engine.getUsdValue(wbtc, btcAmount);
 
+        // Assert
         assertEq(expectedUsd, actualUsd);
+    }
+
+    function testGetTokenAmountFromUsd() public {
+        uint256 usdAmountInWei = 125_000e18;  // 125k$
+
+        console2.log(usdAmountInWei);
+        console2.log(config.INITIAL_ETH_PRICE());
+        console2.log(usdAmountInWei / config.INITIAL_ETH_PRICE());
+        uint256 expectedEth = 10 ** config.DECIMALS() * usdAmountInWei / config.INITIAL_ETH_PRICE();
+
+        uint256 actualEth = engine.getTokenAmountFromUsd(weth, usdAmountInWei);
+
+        assertEq(expectedEth, actualEth);
+    }
+
+    function testNormalisingPriceFeedResult(uint256 rawPrice, uint256 priceDigits, uint256 decimals) public {
+        // Arrange
+        uint256 precisionDigits = engine.PRECISION_DIGITS();
+
+        // [4-18]
+        decimals = bound(decimals, 4, precisionDigits);
+    
+        // [1e3, 9.(9)e17]
+        priceDigits = bound(priceDigits, 4, precisionDigits);    
+        uint256 minPrice = 10 ** (priceDigits - 1);
+        uint256 maxPrice = (10 ** priceDigits) - 1;
+        uint256 price = bound(rawPrice, minPrice, maxPrice);
+        
+        // Act
+        uint256 result = engine.getNormalisedPriceFeedResult(price, decimals);
+
+        // Assert
+        if (decimals <= precisionDigits) {
+            uint256 numberOfZeros = precisionDigits - decimals;
+            uint256 expectedResult = price * (10 ** numberOfZeros);
+            
+            assertEq(result, expectedResult, "Result should be price followed by zeros");
+            
+            // Additional check: verify the result has the right number of digits
+            uint256 expectedDigits = priceDigits + numberOfZeros;
+            uint256 actualDigits = _countDigits(result);
+            assertEq(actualDigits, expectedDigits, "Result should have correct number of digits");
+        } else {
+            // If decimals > precision, result should be price divided down
+            uint256 divisor = 10 ** (decimals - precisionDigits);
+            uint256 expectedResult = price / divisor;
+            assertEq(result, expectedResult, "Result should be price divided down");
+        }
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -96,5 +152,18 @@ contract TestDSCSEngine is Test {
         vm.prank(USER);
         vm.expectRevert(DSCEngine.DSCEngine__NeedsMoreThanZero.selector);
         engine.depositCollateral(weth, 0);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            HELPER FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+    function _countDigits(uint256 number) private pure returns (uint256) {
+        if (number == 0) return 1;
+        uint256 digits = 0;
+        while (number > 0) {
+            digits++;
+            number /= 10;
+        }
+        return digits;
     }
 }
