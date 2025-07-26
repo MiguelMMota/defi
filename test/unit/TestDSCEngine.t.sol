@@ -11,6 +11,8 @@ import {DSCEngine} from "../../src/DSCEngine.sol";
 import {DecentralizedStableCoin} from "../../src/DecentralizedStableCoin.sol";
 
 contract TestDSCSEngine is Test {
+    event CollateralDeposited(address indexed user, address indexed token, uint256 indexed amount);
+
     DeployDSC deployer;
     DSCEngine engine;
     DecentralizedStableCoin coin;
@@ -168,6 +170,65 @@ contract TestDSCSEngine is Test {
         vm.prank(USER);
         vm.expectRevert(DSCEngine.DSCEngine__NeedsMoreThanZero.selector);
         engine.depositCollateral(weth, 0);
+    }
+
+    function testRevertsIfCollateralTokenIsNotAllowed() public depositsCollateral {
+        address disallowedColalteralTokenAddress = address(1);
+
+        vm.prank(USER);
+        vm.expectRevert(DSCEngine.DSCEngine__TokenNotAllowed.selector);
+        engine.depositCollateral(disallowedColalteralTokenAddress, 1 ether);
+    }
+
+    function testDepositCollateralTransfersToContractAndUpdatesCollateral() public depositsCollateral {
+        // Arrange
+        uint256 amountToDeposit = 1 ether;
+        address collateralTokenToDeposit = weth;
+        
+        address[] memory collateralTokens = engine.getCollateralTokens();
+        uint256[] memory userBalancesBefore = new uint256[](collateralTokens.length);
+        uint256[] memory contractBalancesBefore = new uint256[](collateralTokens.length);
+
+        for (uint256 i=0; i<collateralTokens.length; i++) {
+            address token = collateralTokens[i];
+            userBalancesBefore[i] = ERC20Mock(token).balanceOf(USER);
+            contractBalancesBefore[i] = ERC20Mock(token).balanceOf(address(engine));
+        }
+
+        // Act
+        vm.startPrank(USER);
+        uint256[] memory initialCollateralAmounts = engine.getUserCollateral();
+        
+        engine.depositCollateral(collateralTokenToDeposit, amountToDeposit);
+        uint256[] memory intermediateCollateralAmounts = engine.getUserCollateral();
+
+        vm.expectEmit(true, true, true, false, address(engine));
+        emit CollateralDeposited(USER, collateralTokenToDeposit, amountToDeposit);
+        
+        engine.depositCollateral(collateralTokenToDeposit, amountToDeposit);
+        
+        uint256[] memory finalCollateralAmounts = engine.getUserCollateral();
+        vm.stopPrank();
+
+        // Assert
+        // 1. The only amount of collateral that we recorded as having changed is the 
+        // one for the token that was deposited, which was increased by amonutToDeposit
+        for (uint256 i=0; i<collateralTokens.length; i++) {
+            address token = collateralTokens[i];
+            if (token == collateralTokenToDeposit) {
+                assertEq(initialCollateralAmounts[i] + amountToDeposit, intermediateCollateralAmounts[i]);
+                assertEq(intermediateCollateralAmounts[i] + amountToDeposit, finalCollateralAmounts[i]);
+
+                assertEq(ERC20Mock(token).balanceOf(USER), userBalancesBefore[i] - 2 * amountToDeposit);
+                assertEq(ERC20Mock(token).balanceOf(address(engine)), contractBalancesBefore[i] + 2 * amountToDeposit);
+            } else {
+                assertEq(initialCollateralAmounts[i], intermediateCollateralAmounts[i]);
+                assertEq(intermediateCollateralAmounts[i], finalCollateralAmounts[i]);
+
+                assertEq(ERC20Mock(token).balanceOf(USER), userBalancesBefore[i]);
+                assertEq(ERC20Mock(token).balanceOf(address(engine)), contractBalancesBefore[i]);
+            }
+        }
     }
 
     /*//////////////////////////////////////////////////////////////

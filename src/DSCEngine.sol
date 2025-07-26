@@ -103,7 +103,7 @@ contract DSCEngine is ReentrancyGuard {
     }
 
     modifier isAllowedToken(address tokenAddress) {
-        if (s_priceFeeds[tokenAddress] == address(0) || _isCollateralToken(tokenAddress)) {
+        if (s_priceFeeds[tokenAddress] == address(0) || !_isCollateralToken(tokenAddress)) {
             revert DSCEngine__TokenNotAllowed();
         }
 
@@ -409,8 +409,6 @@ contract DSCEngine is ReentrancyGuard {
         }
     }
 
-    function foo() public pure {}
-
     /*//////////////////////////////////////////////////////////////
                    PUBLIC AND EXTERNAL VIEW FUNCTIONS
     //////////////////////////////////////////////////////////////*/
@@ -445,5 +443,23 @@ contract DSCEngine is ReentrancyGuard {
     function getNormalisedPriceFeedResult(uint256 price, uint256 decimals) public pure returns (uint256) {
         // for example, if PRECISION = 1e18 and decimals = 8, then we should multiply the price by e10
         return price * (10 ** (PRECISION_DIGITS - decimals));
+    }
+
+    function getUserCollateral() public view returns (uint256[] memory) {
+        uint256[] memory collateralAmounts = new uint256[](s_collateralTokens.length);
+        for (uint256 i = 0; i<s_collateralTokens.length; i++) {
+            collateralAmounts[i] = s_collateralDeposited[msg.sender][s_collateralTokens[i]];
+        }
+
+        return collateralAmounts;
+    }
+
+    function getCollateralTokens() public view returns (address[] memory) {
+        address[] memory collateralTokens = new address[](s_collateralTokens.length);
+        for (uint256 i = 0; i<s_collateralTokens.length; i++) {
+            collateralTokens[i] = s_collateralTokens[i];
+        }
+
+        return collateralTokens;
     }
 }
