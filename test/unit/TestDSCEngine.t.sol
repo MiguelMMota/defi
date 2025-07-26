@@ -173,14 +173,19 @@ contract TestDSCSEngine is Test {
     }
 
     function testRevertsIfCollateralTokenIsNotAllowed() public depositsCollateral {
-        address disallowedColalteralTokenAddress = address(1);
+        ERC20Mock ranToken = new ERC20Mock("RAN", "RAN", USER, START_ERC20_BALANCE);
 
-        vm.prank(USER);
+        vm.startPrank(USER);
         vm.expectRevert(DSCEngine.DSCEngine__TokenNotAllowed.selector);
-        engine.depositCollateral(disallowedColalteralTokenAddress, 1 ether);
+        engine.depositCollateral(address(ranToken), 1 ether);
+        vm.stopPrank();
     }
 
     function testDepositCollateralTransfersToContractAndUpdatesCollateral() public depositsCollateral {
+        // NB: the course by Patrick Collins actually does a much simpler implementation of this, by
+        // only checking the USD value of the whole collateral for the user, instead of the amount of
+        // each token.
+
         // Arrange
         uint256 amountToDeposit = 1 ether;
         address collateralTokenToDeposit = weth;
@@ -188,6 +193,9 @@ contract TestDSCSEngine is Test {
         address[] memory collateralTokens = engine.getCollateralTokens();
         uint256[] memory userBalancesBefore = new uint256[](collateralTokens.length);
         uint256[] memory contractBalancesBefore = new uint256[](collateralTokens.length);
+
+        vm.prank(USER);
+        uint256 initialDscMinted = engine.getDscMinted();
 
         for (uint256 i=0; i<collateralTokens.length; i++) {
             address token = collateralTokens[i];
@@ -229,6 +237,10 @@ contract TestDSCSEngine is Test {
                 assertEq(ERC20Mock(token).balanceOf(address(engine)), contractBalancesBefore[i]);
             }
         }
+
+        vm.prank(USER);
+        uint256 dscMinted = engine.getDscMinted();
+        assertEq(initialDscMinted, dscMinted);
     }
 
     /*//////////////////////////////////////////////////////////////

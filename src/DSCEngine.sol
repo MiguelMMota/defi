@@ -462,4 +462,8 @@ contract DSCEngine is ReentrancyGuard {
 
         return collateralTokens;
     }
+
+    function getDscMinted() public view returns (uint256) {
+        return s_dscMinted[msg.sender];
+    }
 }
