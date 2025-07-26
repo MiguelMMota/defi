@@ -48,9 +48,12 @@ contract TestDSCSEngine is Test {
                            CONSTRUCTOR TESTS
     //////////////////////////////////////////////////////////////*/
     function testConstructorRevertsIfTokenAddressesAndPriceFeedAddressesHaveDifferentLengths() public {
-        address[] memory tokenAddresses = engine.getCollateralTokens();
+        address[] memory tokenAddresses = new address[](2);
+        tokenAddresses[0] = weth;
+        tokenAddresses[1] = wbtc;
+
         address[] memory priceFeedAddresses = new address[](1);
-        priceFeedAddresses[0] = engine.getPriceFeeds()[0];
+        priceFeedAddresses[0] = ethUsdPriceFeed;
 
         vm.expectRevert(DSCEngine.DSCEngine__TokenAddressesAndPriceFeedAddressesMustBeSameLength.selector);
         new DSCEngine(tokenAddresses, priceFeedAddresses, address(coin));

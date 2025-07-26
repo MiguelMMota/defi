@@ -443,18 +443,4 @@ contract DSCEngine is ReentrancyGuard {
         // both price and amount are in wei (* 1e18), so we need to divide once by that precision factor
         return _getNormalisedPriceFeedResult(uint256(price), priceFeed.decimals()) * amount / PRECISION;
     }
-
-    function getCollateralTokens() external view returns(address[] memory) {
-        return s_collateralTokens;
-    }
-
-    function getPriceFeeds() external view returns(address[] memory) {
-        // We can't just return a mapping in Solidity
-        address[] memory result = new address[](s_collateralTokens.length);
-        for (uint256 i=0; i<s_collateralTokens.length; i++) {
-            result[i] = s_priceFeeds[s_collateralTokens[i]];
-        }
-
-        return result;
-    }
 }
