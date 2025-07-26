@@ -363,6 +363,8 @@ contract DSCEngine is ReentrancyGuard {
     }
 
     function _calculateHealthFactor(uint256 collateralAmount, uint256 amountMinted) internal pure returns (uint256) {
+        if (amountMinted == 0) return type(uint256).max;
+
         // (LIQUIDATION_THRESHOLD / LIQUIDATION_PRECISION) normalises the ratio of collateral/minted to [0,1]
         uint256 maximumMintedAmount = collateralAmount * LIQUIDATION_THRESHOLD / LIQUIDATION_PRECISION;
 
