@@ -1,14 +1,9 @@
 // SPDX-License-Identifier: MIT
 
-// Invariants will detail the properties in our files that must hold true
-
-// What are our invariants?
-// Proposed by Patrick
-// 1. The total supply of DSC should be less than the total value of collateral (really, shouldn't it be less than collateral / threshold ?)
-// 2. Getter view functions should never revert <- evergreen invariant. All contracts should have it
-
-// Proposed by me
-// 3. Users only have collateral on allowed tokens
+// An example of a quick test we can use with fail_on_revert = false,
+// but which is unlikely to yield very significant results because of
+// all the ways the contract functions can revert with random inputs
+// and order of operations
 
 pragma solidity ^0.8.18;
 
