@@ -5,6 +5,7 @@
 pragma solidity ^0.8.18;
 
 import {Test, console2} from "forge-std/Test.sol";
+import { MockV3Aggregator } from "../../mocks/MockV3Aggregator.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/ERC20Mock.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
@@ -15,6 +16,7 @@ contract Handler is Test {
     DSCEngine engine;
     DecentralizedStableCoin coin;
     mapping(address => ERC20Mock) mockTokensByAddress;
+    mapping(address => MockV3Aggregator) usdPriceFeeds;
 
     uint256 constant MAX_DEPOSIT_SIZE = type(uint96).max;
     address[] public usersWithCollateralDeposited;
@@ -26,6 +28,7 @@ contract Handler is Test {
         for (uint256 i=0; i < mockTokens.length; i++) {
             ERC20Mock mockToken = mockTokens[i];
             mockTokensByAddress[address(mockToken)] = mockToken;
+            usdPriceFeeds[address(mockToken)] = MockV3Aggregator(dscEngine.getCollateralTokenPriceFeed(address(mockToken)));
         }
     }
 
@@ -84,6 +87,14 @@ contract Handler is Test {
     // {
     //     depositCollateral(collateralSeed, amountCollateral);
     //     _mintDsc(amountToMint, msg.sender);
+    // }
+
+    // function updateCollateralPrice(uint96 newPrice, uint256 collateralSeed) public {
+    //     int256 intNewPrice = int256(uint256(newPrice));
+    //     ERC20Mock collateral = _getCollateralFromSeed(collateralSeed);
+    //     MockV3Aggregator priceFeed = usdPriceFeeds[collateralSeed];
+
+    //     priceFeed.updateAnswer(intNewPrice);
     // }
 
     /*//////////////////////////////////////////////////////////////
