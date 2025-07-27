@@ -30,7 +30,7 @@ contract OpenInvariantsTest is StdInvariant, Test {
         targetContract(address(engine));
     }
 
-    function invariant__protocolMustHaveMoreValueThanTotalSupply() public {
+    function invariant__openTestProtocolMustHaveMoreValueThanTotalSupply() public {
         // get the value of all the collateral in the protocol
         // compare it to all the debt (coin)
         assertGe(utils.getTotalCollateralValue(), coin.totalSupply());
