@@ -63,6 +63,7 @@ contract DSCEngine is ReentrancyGuard {
     error DSCEngine__NeedsMoreThanZero();
     error DSCEngine__NeedUserAddressToLiquidate();
     error DSCEngine__NoTokenAndPriceFeedData();
+    error DSCEngine__NotOwner();
     error DSCEngine__TokenAddressesAndPriceFeedAddressesMustBeSameLength();
     error DSCEngine__TokenNotAllowed();
     error DSCEngine__TransferFailed();
@@ -76,6 +77,7 @@ contract DSCEngine is ReentrancyGuard {
     uint256 private constant MIN_HEALTH_FACTOR = 1e18;
     uint256 public constant PRECISION_DIGITS = 18;
     uint256 private constant PRECISION = 10 ** PRECISION_DIGITS;
+    address private ownerAddress;
 
     mapping(address token => address priceFeed) private s_priceFeeds;
     mapping(address user => mapping(address token => uint256 amount)) private s_collateralDeposited;
@@ -110,10 +112,18 @@ contract DSCEngine is ReentrancyGuard {
         _;
     }
 
+    modifier onlyOwner() {
+        if (msg.sender != ownerAddress) {
+            revert DSCEngine__NotOwner();
+        }
+
+        _;
+    }
+
     /*//////////////////////////////////////////////////////////////
                                FUNCTIONS
     //////////////////////////////////////////////////////////////*/
-    constructor(address[] memory tokenAddresses, address[] memory priceFeedAddresses, address dscAddress) {        
+    constructor(address[] memory tokenAddresses, address[] memory priceFeedAddresses, address dscAddress, address owner) {        
         if (tokenAddresses.length != priceFeedAddresses.length) {
             revert DSCEngine__TokenAddressesAndPriceFeedAddressesMustBeSameLength();
         }
@@ -128,6 +138,7 @@ contract DSCEngine is ReentrancyGuard {
         }
 
         i_dsc = DecentralizedStableCoin(dscAddress);
+        ownerAddress = owner;
     }
 
     /*//////////////////////////////////////////////////////////////

@@ -45,7 +45,7 @@ contract TestDSCSEngine is Test {
 
     function setUp() public {
         deployer = new DeployDSC();
-        (coin, engine, config) = deployer.createContracts();
+        (coin, engine, config) = deployer.createContracts(address(this));
         (ethUsdPriceFeed, btcUsdPriceFeed, weth, wbtc,) = config.activeNetworkConfig();
 
         // give the user 10 ether worth of WETH.
@@ -64,12 +64,12 @@ contract TestDSCSEngine is Test {
         priceFeedAddresses[0] = ethUsdPriceFeed;
 
         vm.expectRevert(DSCEngine.DSCEngine__TokenAddressesAndPriceFeedAddressesMustBeSameLength.selector);
-        new DSCEngine(tokenAddresses, priceFeedAddresses, address(coin));
+        new DSCEngine(tokenAddresses, priceFeedAddresses, address(coin), address(this));
     }
 
     function testConstructorRevertsWithoutTokenAndPriceData() public {
         vm.expectRevert(DSCEngine.DSCEngine__NoTokenAndPriceFeedData.selector);
-        new DSCEngine(new address[](0), new address[](0), address(coin));   
+        new DSCEngine(new address[](0), new address[](0), address(coin), address(this));   
     }
 
     /*//////////////////////////////////////////////////////////////
