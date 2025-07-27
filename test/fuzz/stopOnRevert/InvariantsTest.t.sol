@@ -13,7 +13,7 @@
 pragma solidity ^0.8.18;
 
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
-import {Test} from "forge-std/Test.sol";
+import {Test, console2} from "forge-std/Test.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/ERC20Mock.sol";
 
@@ -52,6 +52,12 @@ contract InvariantsTest is StdInvariant, Test {
     function invariant__protocolMustHaveMoreValueThanTotalSupply() public {
         // get the value of all the collateral in the protocol
         // compare it to all the debt (coin)
-        assertGe(utils.getTotalCollateralValue(), coin.totalSupply());
+        uint256 collateralValue = utils.getTotalCollateralValue();
+        uint256 totalSupply = coin.totalSupply();
+
+        console2.log(collateralValue);
+        console2.log(totalSupply);
+
+        assertGe(collateralValue, totalSupply);
     }
 }

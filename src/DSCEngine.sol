@@ -453,6 +453,16 @@ contract DSCEngine is ReentrancyGuard {
         return  normalisedPrice * amount / PRECISION;
     }
 
+    function getCollateralAmountFromUsdValue(address token, uint256 dollarValue) public view returns (uint256) {
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
+
+        (, int256 price,,,) = priceFeed.latestRoundData();
+        uint256 normalisedPrice = getNormalisedPriceFeedResult(uint256(price), priceFeed.decimals());
+
+        // TODO: there's might be a rounding bug here: for number with infinite decimal places we return 1.2323000000 instead of 1.232323
+        return  dollarValue * PRECISION / normalisedPrice;
+    }
+
     function getNormalisedPriceFeedResult(uint256 price, uint256 decimals) public pure returns (uint256) {
         // for example, if PRECISION = 1e18 and decimals = 8, then we should multiply the price by e10
         return price * (10 ** (PRECISION_DIGITS - decimals));
