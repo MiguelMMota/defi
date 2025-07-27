@@ -377,7 +377,7 @@ contract DSCEngine is ReentrancyGuard {
         if (amountMinted == 0) return type(uint256).max;
 
         // (LIQUIDATION_THRESHOLD / LIQUIDATION_PRECISION) normalises the ratio of collateral/minted to [0,1]
-        uint256 maximumMintedAmount = collateralAmount * LIQUIDATION_THRESHOLD / LIQUIDATION_PRECISION;
+        uint256 maximumMintedAmount = getUserMaxMintAmount(collateralAmount);
 
         // we multiply by the precision because if both maximumMintedAmount and s_dscMinted[user] have 1e18 decimal
         // places,
@@ -476,7 +476,24 @@ contract DSCEngine is ReentrancyGuard {
         return collateralTokens;
     }
 
+    function getPriceFeeds() public view returns (address[] memory) {
+        address[] memory priceFeeds = new address[](s_collateralTokens.length);
+        for (uint256 i = 0; i<s_collateralTokens.length; i++) {
+            priceFeeds[i] = s_priceFeeds[s_collateralTokens[i]];
+        }
+
+        return priceFeeds;
+    }
+
     function getDscMinted() public view returns (uint256) {
         return s_dscMinted[msg.sender];
+    }
+
+    function getCollateralBalanceOfUser(address user, address token) external view returns (uint256) {
+        return s_collateralDeposited[user][token];
+    }
+
+    function getUserMaxMintAmount(uint256 collateralAmount) public pure returns (uint256) {
+        return collateralAmount * LIQUIDATION_THRESHOLD / LIQUIDATION_PRECISION;
     }
 }
