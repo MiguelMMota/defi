@@ -15,6 +15,7 @@ pragma solidity ^0.8.18;
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import {Test, console2} from "forge-std/Test.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
+import { MockV3Aggregator } from "../../mocks/MockV3Aggregator.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/ERC20Mock.sol";
 
 import {Handler} from "./Handler.t.sol";
@@ -59,5 +60,24 @@ contract InvariantsTest is StdInvariant, Test {
         console2.log(totalSupply);
 
         assertGe(collateralValue, totalSupply);
+    }
+
+    function invariant_gettersShouldNotRevert() public view {
+        engine.LIQUIDATION_BONUS();
+        engine.LIQUIDATION_PRECISION();
+        engine.LIQUIDATION_THRESHOLD();
+        engine.PRECISION_DIGITS();
+        engine.getCollateralTokens();
+        engine.getDscMinted();
+        engine.getHealthFactor();
+        engine.getPriceFeeds();
+        engine.getUserCollateral();
+        // engine.getCollateralAmountFromUsdValue(address,uint256);
+        // engine.getCollateralBalanceOfUser(address,address);
+        // engine.getNormalisedPriceFeedResult(uint256,uint256);
+        // engine.getTokenAmountFromUsd(address,uint256);
+        // engine.getUsdValue(address,uint256);
+        // engine.getUserCollateralValue(address);
+        // engine.getUserMaxMintAmount(uint256);
     }
 }
