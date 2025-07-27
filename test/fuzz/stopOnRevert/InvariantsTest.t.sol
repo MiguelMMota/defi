@@ -12,7 +12,8 @@
 
 pragma solidity ^0.8.18;
 
-import {Test, console2} from "forge-std/Test.sol";
+import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+import {Test} from "forge-std/Test.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/ERC20Mock.sol";
 
@@ -22,6 +23,7 @@ import {DeployDSC} from "../../../script/DeployDSC.s.sol";
 import {HelperConfig} from "../../../script/HelperConfig.s.sol";
 import {DSCEngine} from "../../../src/DSCEngine.sol";
 import {DecentralizedStableCoin} from "../../../src/DecentralizedStableCoin.sol";
+
 
 contract InvariantsTest is StdInvariant, Test {
     DeployDSC deployer;
@@ -36,7 +38,7 @@ contract InvariantsTest is StdInvariant, Test {
         (coin, engine, config) = deployer.run(address(this));
         utils = new DSCEngineUtils(engine);
 
-        (,,address weth, address wbtc,) = config.activeNetworkConfig();
+        (,, address weth, address wbtc,) = config.activeNetworkConfig();
 
         ERC20Mock[] memory mockTokens = new ERC20Mock[](2);
 
@@ -50,10 +52,6 @@ contract InvariantsTest is StdInvariant, Test {
     function invariant__protocolMustHaveMoreValueThanTotalSupply() public {
         // get the value of all the collateral in the protocol
         // compare it to all the debt (coin)
-        
-        // console2.log(utils.getTotalCollateralValue());
-        // console2.log(coin.totalSupply());
-
         assertGe(utils.getTotalCollateralValue(), coin.totalSupply());
     }
 }

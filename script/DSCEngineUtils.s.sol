@@ -24,8 +24,9 @@ contract DSCEngineUtils is ServerConstants, Script {
         return IERC20(token);
     }
 
-    function getTotalTokenCollateralValue(address token) private view returns (uint256) {
-        uint256 totalTokenAmount = getERC20(token).balanceOf(address(this));
+    function getTotalTokenCollateralValue(address token) public view returns (uint256) {
+        uint256 totalTokenAmount = getERC20(token).balanceOf(address(engine));
+
         return engine.getUsdValue(token, totalTokenAmount);
     }
 

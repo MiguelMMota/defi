@@ -29,15 +29,56 @@ contract Handler is Test {
 
     // redeem collateral - insteads
     function depositCollateral(uint256 collateralSeed, uint256 amountCollateral) public {
+        address user = msg.sender;
         ERC20Mock collateral = _getCollateralFromSeed(collateralSeed);
         amountCollateral = bound(amountCollateral, 1, MAX_DEPOSIT_SIZE);
-        address user = msg.sender;
         
         vm.startPrank(user);
         collateral.mint(user, amountCollateral);
         collateral.approve(address(engine), amountCollateral);
         engine.depositCollateral(address(collateral), amountCollateral);
         vm.stopPrank();
+    }
+
+    function redeemCollateral(uint256 collateralSeed, uint256 amountCollateral) public {
+        address user = msg.sender;
+        ERC20Mock collateral = _getCollateralFromSeed(collateralSeed);
+        uint256 maxCollateralToRedeem = engine.getCollateralBalanceOfUser(user, address(collateral));
+
+        // User must have some collateral to redeem.
+        // vm.assume(condition) stops the fuzz run and
+        // discards the inputs the condition isn't met.
+        vm.assume(maxCollateralToRedeem > 0);
+        amountCollateral = bound(amountCollateral, 1, maxCollateralToRedeem);
+        
+        vm.prank(user);
+        engine.redeemCollateral(address(collateral), amountCollateral);
+    }
+
+    function mintDsc(uint256 amountDscToMint) public {
+        address user = msg.sender;
+
+        vm.startPrank(user);
+        uint256 amountMintedByUser = engine.getDscMinted();
+        uint256 userCollateralValue = engine.getUserCollateralValue(user);
+        uint256 availableMintAmount = engine.getUserMaxMintAmount(userCollateralValue) - amountMintedByUser;
+        vm.stopPrank();
+        
+        vm.assume(availableMintAmount > 0);
+        amountDscToMint = bound(amountDscToMint, 1, availableMintAmount);
+
+        vm.prank(user);
+        engine.mintDsc(amountDscToMint);
+    }
+
+    function depositCollateralAndMintDsc(
+        address tokenCollateralAddress,
+        uint256 amountCollateral,
+        uint256 amountToMint
+    )
+        external
+    {
+        engine.depositCollateralAndMintDsc(tokenCollateralAddress, amountCollateral, amountToMint);
     }
 
     /*//////////////////////////////////////////////////////////////
