@@ -15,7 +15,7 @@ pragma solidity ^0.8.18;
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import {Test, console2} from "forge-std/Test.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
-import { MockV3Aggregator } from "../../mocks/MockV3Aggregator.sol";
+import { MockV3Aggregator } from "../../mock/MockV3Aggregator.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/ERC20Mock.sol";
 
 import {Handler} from "./Handler.t.sol";
@@ -72,6 +72,7 @@ contract InvariantsTest is StdInvariant, Test {
         engine.getHealthFactor();
         engine.getPriceFeeds();
         engine.getUserCollateral();
+        engine.getUsersWithDsc();
         // engine.getCollateralAmountFromUsdValue(address,uint256);
         // engine.getCollateralBalanceOfUser(address,address);
         // engine.getNormalisedPriceFeedResult(uint256,uint256);

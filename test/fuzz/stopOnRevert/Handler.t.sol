@@ -5,7 +5,7 @@
 pragma solidity ^0.8.18;
 
 import {Test, console2} from "forge-std/Test.sol";
-import { MockV3Aggregator } from "../../mocks/MockV3Aggregator.sol";
+import { MockV3Aggregator } from "../../mock/MockV3Aggregator.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/ERC20Mock.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
@@ -28,7 +28,7 @@ contract Handler is Test {
         for (uint256 i=0; i < mockTokens.length; i++) {
             ERC20Mock mockToken = mockTokens[i];
             mockTokensByAddress[address(mockToken)] = mockToken;
-            usdPriceFeeds[address(mockToken)] = MockV3Aggregator(dscEngine.getCollateralTokenPriceFeed(address(mockToken)));
+            usdPriceFeeds[address(mockToken)] = MockV3Aggregator(engine.getCollateralTokenPriceFeed(address(mockToken)));
         }
     }
 
@@ -78,16 +78,27 @@ contract Handler is Test {
         _mintDsc(amountDscToMint, user);
     }
 
-    // function depositCollateralAndMintDsc(
-    //     uint256 collateralSeed,
-    //     uint256 amountCollateral,
-    //     uint256 amountToMint
-    // )
-    //     external
-    // {
-    //     depositCollateral(collateralSeed, amountCollateral);
-    //     _mintDsc(amountToMint, msg.sender);
-    // }
+    function depositCollateralAndMintDsc(
+        uint256 collateralSeed,
+        uint256 amountCollateral,
+        uint256 amountToMint
+    )
+        external
+    {
+        depositCollateral(collateralSeed, amountCollateral);
+        _mintDsc(amountToMint, msg.sender);
+    }
+
+    function burnDsc(uint256 amountToBurn, uint256 userSeed) public {
+        address[] memory usersWithDscMinted = engine.getUsersWithDsc();
+        address user = usersWithDscMinted[userSeed % usersWithDscMinted.length];
+        amountToBurn = bound(amountToBurn, 0, coin.balanceOf(user));
+        
+        vm.assume(amountToBurn > 0);
+        
+        vm.prank(user);
+        engine.burnDsc(amountToBurn);
+    }
 
     // function updateCollateralPrice(uint96 newPrice, uint256 collateralSeed) public {
     //     int256 intNewPrice = int256(uint256(newPrice));

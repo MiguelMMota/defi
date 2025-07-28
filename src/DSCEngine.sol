@@ -24,11 +24,12 @@
 
 pragma solidity ^0.8.18;
 
+import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
 import { DecentralizedStableCoin } from "./DecentralizedStableCoin.sol";
+import {OracleLib} from "./libraries/OracleLib.sol";
 
 /*
  * @title DSCEngine
@@ -69,6 +70,11 @@ contract DSCEngine is ReentrancyGuard {
     error DSCEngine__TransferFailed();
 
     /*//////////////////////////////////////////////////////////////
+                                 TYPES
+    //////////////////////////////////////////////////////////////*/
+    using OracleLib for AggregatorV3Interface;
+
+    /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
     uint256 public constant LIQUIDATION_BONUS = 10; // 10%, when divided by LIQUIDATION_PRECISION
@@ -83,6 +89,7 @@ contract DSCEngine is ReentrancyGuard {
     mapping(address user => mapping(address token => uint256 amount)) private s_collateralDeposited;
     mapping(address user => uint256 amountDscMinted) private s_dscMinted;
     address[] private s_collateralTokens;
+    address[] public usersWithDsc;
 
     DecentralizedStableCoin private immutable i_dsc;
 
@@ -218,7 +225,7 @@ contract DSCEngine is ReentrancyGuard {
      * @notice they must have more collateral value than the minimum threshold
      */
     function mintDsc(uint256 amountDscToMint) public moreThanZero(amountDscToMint) nonReentrant {
-        s_dscMinted[msg.sender] += amountDscToMint;
+        _recordDscMinted(msg.sender, amountDscToMint);
 
         // if they minted too much ($150 DSC minted with only 100$ ETH collateral)
         _revertIfHealthFactorIsBroken(msg.sender);
@@ -294,7 +301,7 @@ contract DSCEngine is ReentrancyGuard {
         returns (uint256 tokenAmountInWei)
     {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[tokenAddress]);
-        (, int256 price,,,) = priceFeed.latestRoundData();
+        (, int256 price,,,) = priceFeed.staleCheckLatestRoundData();
         uint256 normalisedPrice = getNormalisedPriceFeedResult(uint256(price), priceFeed.decimals());
         return usdAmountInWei * PRECISION / normalisedPrice;
     }
@@ -302,6 +309,47 @@ contract DSCEngine is ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                      PRIVATE AND INTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
+    function _userHasDsc(address user) private view returns (bool) {
+        for (uint256 i=0; i < usersWithDsc.length; i++) {
+            if (usersWithDsc[i] == user) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    function _recordDscMinted(address user, uint256 amount) private {
+        if (amount == 0) {
+            return;
+        }
+
+        if (!_userHasDsc(user)) {
+            usersWithDsc.push(user);
+        }
+        s_dscMinted[user] += amount;
+    }
+
+    function _removeUserFromUsersWithDsc(address userToRemove) private {
+        for (uint256 i = usersWithDsc.length - 1; i >= 0; i--) {
+            if (usersWithDsc[i] == userToRemove) {
+                usersWithDsc[i] = usersWithDsc[usersWithDsc.length - 1];
+                usersWithDsc.pop();
+            }
+        }
+    }
+
+    function _recordDscBurned(address user, uint256 amount) private {
+        if (amount == 0) {
+            return;
+        }
+
+        s_dscMinted[user] -= amount;
+        if (!_userHasDsc(user)) {
+            _removeUserFromUsersWithDsc(user);
+        }
+    }
+
     function _redeemCollateralForDsc(
         address tokenCollateralAddress,
         uint256 collateralAmountToRedeem,
@@ -353,7 +401,7 @@ contract DSCEngine is ReentrancyGuard {
             revert DSCEngine__InsufficientDSC();
         }
 
-        s_dscMinted[onBehalfOf] -= amountToBurn;
+        _recordDscBurned(onBehalfOf, amountToBurn);
         bool success = i_dsc.transferFrom(dscFrom, address(this), amountToBurn);
         if (!success) {
             revert DSCEngine__TransferFailed();
@@ -445,7 +493,7 @@ contract DSCEngine is ReentrancyGuard {
     function getUsdValue(address token, uint256 amount) public view returns (uint256) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
 
-        (, int256 price,,,) = priceFeed.latestRoundData();
+        (, int256 price,,,) = priceFeed.staleCheckLatestRoundData();
         uint256 normalisedPrice = getNormalisedPriceFeedResult(uint256(price), priceFeed.decimals());
 
         // both price and amount are in wei (* 1e18), so we need to divide once by that precision factor
@@ -456,7 +504,7 @@ contract DSCEngine is ReentrancyGuard {
     function getCollateralAmountFromUsdValue(address token, uint256 dollarValue) public view returns (uint256) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
 
-        (, int256 price,,,) = priceFeed.latestRoundData();
+        (, int256 price,,,) = priceFeed.staleCheckLatestRoundData();
         uint256 normalisedPrice = getNormalisedPriceFeedResult(uint256(price), priceFeed.decimals());
 
         // TODO: there's might be a rounding bug here: for number with infinite decimal places we return 1.2323000000 instead of 1.232323
@@ -505,5 +553,17 @@ contract DSCEngine is ReentrancyGuard {
 
     function getUserMaxMintAmount(uint256 collateralAmount) public pure returns (uint256) {
         return collateralAmount * LIQUIDATION_THRESHOLD / LIQUIDATION_PRECISION;
+    }
+
+    function getCollateralTokenPriceFeed(address token) external view returns (address) {
+        return s_priceFeeds[token];
+    }
+
+    function getUsersWithDsc() external view returns (address[] memory) {
+        address[] memory result = new address[](usersWithDsc.length);
+        for (uint256 i=0; i < usersWithDsc.length; i++) {
+            result[i] = usersWithDsc[i];
+        }
+        return result;
     }
 }
